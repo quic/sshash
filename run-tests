@@ -1,0 +1,69 @@
+#!/bin/bash
+#
+
+# FIXME: Convert into CTest
+
+run_cmd()
+{
+	echo $1
+	eval $1
+}
+
+echo "running original binaries (expted to pass) -----"
+run_cmd "./tests/conf-test json tests/vects/test.json"
+run_cmd "./tests/conf-test xml tests/vects/test.xml"
+
+echo; echo
+echo "dumping elf sections -----"
+run_cmd "readelf -p .sshash.str ./tests/*-test"
+
+echo; echo
+echo "stripping all debug info -----"
+run_cmd "strip --strip-all ./tests/*-test"
+
+echo; echo
+echo "hashing binaries -----"
+run_cmd "./tools/sshash-elf --hashmap ./tests/test.map ./tests/*-test"
+
+echo; echo
+echo "dumping elf sections -----"
+run_cmd "readelf -p .sshash.str ./tests/*-test"
+
+echo; echo
+echo "running hashed binaries with original vectors (expected to fail) -----"
+run_cmd "./tests/conf-test json tests/vects/test.json"
+run_cmd "./tests/conf-test xml tests/vects/test.xml"
+
+echo; echo
+echo "hashing json/xml/txt files -----"
+run_cmd "./tools/sshash-text --hashmap ./tests/test.map ./tests/vects/test.{json,xml,txt}"
+
+echo; echo
+echo "running hashed binaries with hashed vectors (expected to pass) -----"
+run_cmd "./tests/conf-test json tests/vects/test.hashed.json"
+run_cmd "./tests/conf-test xml tests/vects/test.hashed.xml"
+
+echo; echo
+echo "checking for leaks -----"
+run_cmd "strings ./tests/conf-test | grep 'top-secret'"
+
+echo; echo
+echo "original json/xml ----"
+run_cmd "cat ./tests/vects/test.{json,xml}"
+
+echo; echo
+echo "hashed json/xml ----"
+run_cmd "cat ./tests/vects/test.hashed.{json,xml}"
+
+echo; echo
+echo "generating hashed txt log ----"
+run_cmd "./tests/hogl-test"
+
+echo; echo
+echo "generating hashed raw log ----"
+run_cmd "./tests/hogl-test --log-format raw --log-output ./tests/hogl.log.raw"
+
+echo; echo
+echo "unhashing raw log ----"
+export SSHASH_FMT_HASHMAP="./tests/test.map"
+run_cmd "hogl-cook --plugin ./src/libsshash-fmt-plugin.so ./tests/hogl.log.raw"

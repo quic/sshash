@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xml>
+    <top-secret>
+        <level2>yes level2 looks good</level2>
+    </top-secret>
+    <public>
+        <everyone>value is good</everyone>
+    </public>
+    <TransformUncertainties>
+        <top-secret level1="XYZ" level2="L2 info 123" attr0="0.0 0.0 0.0" attr1="0.05 0.05 0.05" />
+        <top-secret level1="XYZ" level2="L2 info 245" attr0="0. 0. 0." attr1="0. 0. 0." />
+        <top-secret level1="XYZ" level2="L2 info 567" attr0="0.0 0.0 0.0" attr1="0.05 0.05 0.05" />
+        <top-secret level1="XYZ" level2="L2 info 890" attr0="0.0 0.0 0.0" attr1="0.05 0.05 0.05" />
+    </TransformUncertainties>
+</xml>

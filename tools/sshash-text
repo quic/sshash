@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+#
+#  Copyright (c) 2021, Qualcomm Innovation Center, Inc. All rights reserved.
+#
+#  Redistribution and use in source and binary forms, with or without
+#  modification, are permitted provided that the following conditions are met:
+#
+#  1. Redistributions of source code must retain the above copyright notice,
+#     this list of conditions and the following disclaimer.
+#
+#  2. Redistributions in binary form must reproduce the above copyright notice,
+#     this list of conditions and the following disclaimer in the documentation
+#     and/or other materials provided with the distribution.
+#
+#  3. Neither the name of the copyright holder nor the names of its contributors
+#     may be used to endorse or promote products derived from this software
+#     without specific prior written permission.
+#
+#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+#  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+#  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+#  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+#  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+#  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+#  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+#  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+#  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+#  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+#  POSSIBILITY OF SUCH DAMAGE.
+#
+#  SPDX-License-Identifier: BSD-3-Clause
+
+import os, sys, copy, time
+
+# Figure out our homedir
+local_homedir = os.path.realpath( os.path.dirname(sys.argv[0]) )
+sys.path.append(local_homedir + "/../lib/sshash/python")
+
+import argparse, re, json, xmltodict
+
+# Prefix all output files with
+output_prefix = None
+output_suffix = '.hashed'
+
+# Generate reverse map "string" --> "hash" from hashmap dict
+# This is used for fast search for strings in the inputs
+def generate_rmap(hashmap):
+    rmap = {}
+    for h in hashmap:
+        rmap[hashmap[h]['str']] = h
+    return rmap
+
+# Generate normal map "hash" --> "string" from hashmap dict
+# This is used for fast search for strings in the inputs
+def generate_hmap(hashmap):
+    hmap = {}
+    for h in hashmap:
+        hmap[h] = hashmap[h]['str']
+    return hmap
+
+# Replace string if in rmap, otherwise return as is
+def replace_rmap_str(rmap, s):
+    # Check for special chars used by xmltodict for XML attributes and text
+    p = ''
+    if s is None:
+        return None
+    if s[0] in [ '#', '@' ]:
+        p = s[0]
+        s = s[1:]
+    if s in rmap:
+        return p + rmap[s]
+    return p + s
+
+# Replace strings present in list in the dictionary
+def replace_rmap_list(rmap, l):
+    nl = [] # new list
+    for v in l:
+        if isinstance(v, dict):
+            nl.append( replace_rmap_dict(rmap, v) )
+        elif isinstance(v, list):
+            nl.append( replace_rmap_list(rmap, v) )
+        else:
+            nl.append( replace_rmap_str(rmap, v) )
+    return nl
+
+# Replace strings present in rmap in the dictionary
+def replace_rmap_dict(rmap, d):
+    nd = {} # new dictionary
+    for k, v in d.items():
+        nk = replace_rmap_str(rmap, k)
+        if isinstance(v, dict):
+            nd[nk] = replace_rmap_dict(rmap, v)
+        elif isinstance(v, list):
+            nd[nk] = replace_rmap_list(rmap, v)
+        else:
+            nd[nk] = replace_rmap_str(rmap, v)
+    return nd
+
+# Generate new output filename
+def output_filename(in_file):
+    name, ext = os.path.splitext(in_file)
+
+    if output_prefix:
+        path = os.path.split(name)
+        name = output_prefix + path[1]
+
+    return name + output_suffix + ext
+
+# Process JSON file
+def process_json(rmap, in_file):
+    out_file = output_filename(in_file)
+    print('processing JSON {} -> {}'.format(in_file, out_file))
+    d  = json.load(open(in_file))
+    nd = replace_rmap_dict(rmap, d);
+    with open(out_file, 'w') as o:
+        json.dump(nd, o, indent=4)
+        o.write('\n')
+ 
+# Process XML file
+def process_xml(rmap, in_file):
+    out_file = output_filename(in_file)
+    print('processing XML {} -> {}'.format(in_file, out_file))
+    d  = xmltodict.parse(open(in_file, 'rb'))
+    nd = replace_rmap_dict(rmap, d);
+    with open(out_file, 'w') as o:
+        o.write(xmltodict.unparse(nd, pretty=True))
+        o.write('\n')
+
+ 
+# Process TXT file
+def process_txt(rmap, in_file):
+    out_file = output_filename(in_file)
+    print('processing TXT {} -> {}'.format(in_file, out_file))
+
+    w = open(out_file, 'w')
+    r = open(in_file)
+
+    line = r.readline()
+    n = 1
+    while line:
+        # FIXME: Dumb bruteforce implementation
+        for i in rmap:
+            line = line.replace(i, rmap[i]);
+        w.write(line)
+
+        line = r.readline()
+        n += 1
+    
+    return
+
+# Figure out format from file extension
+def process_auto(rmap, in_file):
+    name, ext = os.path.splitext(in_file)
+ 
+    proc = None
+    if ext in [ ".json", ".JSON" ]:
+        proc = process_json
+    elif ext in [ ".xml", ".XML" ]:
+        proc = process_xml
+    else:
+        proc = process_txt
+
+    return proc(rmap, in_file)
+
+if __name__=='__main__':
+    parser = argparse.ArgumentParser(description='sshash-text -- text/json/xml processing tool')
+    parser.add_argument('--hashmap', help='Hash map file (json)')
+    parser.add_argument('--mode', default='hash', help='hash or unhash')
+    parser.add_argument('--out-prefix',  help='Prefix for output files')
+    parser.add_argument('--out-suffix',  default='auto', help='Suffix for output files')
+    parser.add_argument('--format', default='auto', help='Format of the input files: auto/text/json/xml')
+    parser.add_argument('input', nargs='+', help='Input file(s)')
+    args = parser.parse_args()
+
+    if not args.hashmap:
+        print('--hashmap option is mandatory');
+        sys.exit(1)
+
+    output_prefix = args.out_prefix
+
+    if args.out_suffix == 'auto':
+        if args.mode == 'hash':
+            output_suffix = '.hashed'
+        else:
+            output_suffix = '.unhashed'
+    else:
+        output_suffix = args.out_suffix
+ 
+    hashmap = json.load(open(args.hashmap))
+
+    if args.mode == 'hash':
+        rmap = generate_rmap(hashmap)
+    else:
+        rmap = generate_hmap(hashmap)
+
+    proc = None
+    if args.format in [ "auto" ]:
+        proc = process_auto
+    elif args.format in [ "json", "JSON" ]:
+        proc = process_json
+    elif args.format in [ "xml", "XML" ]:
+        proc = process_xml
+    elif args.format in [ "text", "TEXT", "txt", "TXT" ]:
+        proc = process_txt
+    else:
+        print('unsupported input format: {}'.format(args.format));
+        sys.exit(1)
+
+    for i in args.input:
+        proc(rmap, i)

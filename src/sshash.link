@@ -1,0 +1,6 @@
+SECTIONS
+{
+  /* combine all .sshash.str sections */
+  .sshash.str       : { *(.sshash.str, .sshash.str.*) }
+}
+INSERT AFTER .text;

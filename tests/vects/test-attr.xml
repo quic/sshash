@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xml>
+    <top-secret attr0="1" attr1="2">
+        <level2>yes level2 looks good</level2>
+    </top-secret>
+    <public>
+        <everyone>value is good</everyone>
+    </public>
+</xml>

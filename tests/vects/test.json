@@ -1,0 +1,4 @@
+{
+    "top-secret": { "level2": "yes level2 looks good" },
+    "public": { "everyone": "value is good" }
+}
