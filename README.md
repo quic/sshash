@@ -38,3 +38,9 @@ Helpful debug commands:
 readelf -p .sshash_str basic-test  # human-readable string dump of .sshash_str section of ELF file basic-test
 readelf -x .sshash_str basic-test  # hex dump of same section
 ```
+
+## License
+
+SPDX-License-Identifier: BSD-3-Clause
+
+See [LICENSE](LICENSE) for the full license text.
